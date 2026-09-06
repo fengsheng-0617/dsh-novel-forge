@@ -1,0 +1,26 @@
+{
+  "name": "dsh-novel-forge",
+  "version": "0.2.0",
+  "description": "织文 NovelForge —— 可自定义的 AI 小说创作工坊（DSH 组合包：内嵌零依赖 Web 应用 + novelForge 生命周期服务 + novel_forge_* 会话工具集）",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.js",
+  "files": ["index.js", "tools.js", "cordis.patch.yml", "README.md", "app/**"],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "test": "node scripts/test-standalone.mjs && node scripts/test-apply.mjs && node scripts/test-tools.mjs"
+  },
+  "keywords": ["dsh-plugin", "novel", "writing", "ai", "fiction"],
+  "exports": {
+    ".": "./index.js",
+    "./tools": "./tools.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

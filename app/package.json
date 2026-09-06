@@ -1,0 +1,11 @@
+{
+  "name": "novel-forge-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "织文 NovelForge 内嵌应用（零依赖 Node Web 服务，被 dsh-novel-forge 插件拉起）",
+  "type": "commonjs",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=18.17"
+  }
+}

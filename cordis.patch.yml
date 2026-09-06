@@ -1,0 +1,18 @@
+# NovelForge plugin layer: start the embedded novel-writing studio alongside DSH,
+# and expose novel_forge_* conversation tools so sessions can drive it.
+- insert:
+    - id: novel-forge
+      name: dsh-novel-forge
+      config:
+        # 0 = 自动挑选空闲端口；可固定如 7390
+        port: 0
+        host: 127.0.0.1
+        autoStart: true
+        # 等待 /api/health 就绪的最长时间(ms)
+        startTimeoutMs: 20000
+        # 可选：数据目录（相对本包 app/ 或绝对路径），缺省为 app/data
+        dataDir: null
+- insert:
+    - id: novel-forge-tools
+      name: dsh-novel-forge/tools
+      config: {}
