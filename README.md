@@ -8,7 +8,11 @@
 内容/公文/邮件用 `novel_forge_cap_*`），结果与正文预览全部回到会话。**无需打开任何浏览器**；
 内嵌网页应用仅作为可选的可视化界面（工具与网页共用同一份数据，互相同步）。
 
-> **Languages / 语言** — README: [中文](#中文) · [English](#english)　·　更新记录：[CHANGELOG](CHANGELOG.md)
+---
+
+> **🌐 语言 / Languages**
+> 简体中文 | [English](README.en.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [Español](README.es.md) · [Português](README.pt.md)
+> 更新记录：[CHANGELOG](CHANGELOG.md)
 
 ---
 
