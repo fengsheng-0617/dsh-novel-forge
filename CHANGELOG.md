@@ -1,5 +1,8 @@
 # Changelog
 
+> **🌐 语言 / Languages**
+> 简体中文 | [English](CHANGELOG.en.md) · [Français](CHANGELOG.fr.md) · [Русский](CHANGELOG.ru.md) · [Español](CHANGELOG.es.md) · [Português](CHANGELOG.pt.md)
+
 本文件记录「dsh-novel-forge」（DeepSeek Harness 全能创作壳）每一版的显著变更。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [语义化版本](https://semver.org/lang/zh-CN/)。
 
 ## [0.3.0] - 2026-09-07
