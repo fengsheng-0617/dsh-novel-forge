@@ -1,7 +1,7 @@
 {
   "name": "dsh-novel-forge",
-  "version": "0.2.0",
-  "description": "织文 NovelForge —— 可自定义的 AI 小说创作工坊（DSH 组合包：内嵌零依赖 Web 应用 + novelForge 生命周期服务 + novel_forge_* 会话工具集）",
+  "version": "0.3.0",
+  "description": "织文 NovelForge —— 全能 AI 创作工具（DSH 组合包：小说 + 内容仿写/续写/改写 + 安理会决议仿写 + 学术套磁邮件，可多语言写作）",
   "license": "MIT",
   "type": "module",
   "main": "index.js",

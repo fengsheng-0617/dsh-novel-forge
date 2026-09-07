@@ -22,7 +22,7 @@ try {
   const pr = await (await fetch(h.url + '/api/projects')).json();
   t('首启自动创建示例项目', Array.isArray(pr.projects) && pr.projects.length === 1 && pr.projects[0].demo === true, JSON.stringify(pr.projects && pr.projects[0] && pr.projects[0].name));
   const se = await (await fetch(h.url + '/api/settings')).json();
-  t('厂商预设 12 家、模板 18 套', (se.settings.providers || []).length === 12 && (se.settings.templates || []).length === 18);
+  t('厂商预设 12 家、模板 24 套', (se.settings.providers || []).length === 12 && (se.settings.templates || []).length === 24);
   const st = await (await fetch(h.url + '/api/pipeline/status')).json();
   t('流水线状态接口可用', st.pipeline && st.pipeline.status === 'idle');
 

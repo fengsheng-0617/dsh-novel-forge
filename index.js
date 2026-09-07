@@ -193,6 +193,17 @@ export function apply(ctx, config = {}) {
         logs: handle ? (handle.stderr() + handle.stdout()) : '',
       };
     },
+    /** 能力清单（全能创作壳视图）：novel/content/doc/email 及其动作。 */
+    async capabilities() {
+      if (service.status !== 'running') return { ok: false, error: 'NovelForge 未运行' };
+      try {
+        const r = await fetch(service.url + '/api/capabilities', { signal: AbortSignal.timeout(8000) });
+        const j = await r.json().catch(() => null);
+        return { ok: r.ok, capabilities: j && j.capabilities };
+      } catch (e) {
+        return { ok: false, error: String((e && e.message) || e) };
+      }
+    },
   };
 
   // 以 cordis 方式注册服务（兼容无 provide 的宿主则直接挂到 ctx 上）

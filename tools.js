@@ -90,6 +90,58 @@ function outlineView(rows, withPlan) {
   }));
 }
 
+// ---------------- 能力工作台 helpers（content/doc/email） ----------------
+
+function capBrief(p) {
+  const ws = p.workspace || {};
+  const src = (ws.source && ws.source[0]) || {};
+  return {
+    id: p.id, name: p.name, cap: p.cap || 'text',
+    language: p.language || '',
+    sourceTitle: src.title || '',
+    sourceChars: (src.text || '').length,
+    outputs: (ws.outputs || []).length,
+  };
+}
+
+/** 读取非 novel 能力项目的源文本/参数/输出（并补全默认外壳）。 */
+function readCap(cx, projectId) {
+  return readProject(cx, projectId).then((p) => {
+    if (!p) return null;
+    p.workspace = p.workspace || { kind: p.cap || 'text', source: [{ id: 's_', title: '', text: '', lang: '', meta: {} }], params: {}, outputs: [] };
+    if (!p.workspace.source || !p.workspace.source.length) p.workspace.source = [{ id: 's_', title: '', text: '', lang: '', meta: {} }];
+    if (!Array.isArray(p.workspace.outputs)) p.workspace.outputs = [];
+    return p;
+  });
+}
+
+async function capGen(ctx, action, args, projectId) {
+  const svc = await withService(ctx);
+  if (svc.error) return { ok: false, error: svc.error };
+  const g = await http(svc.url, 'POST', '/api/gen', { projectId, action, args, stream: false });
+  if (!g.ok) {
+    const code = g.status === 409 ? 'NEED_CONFIRM' : 'GEN_FAILED';
+    return { ok: false, code, error: g.error, projectId, action };
+  }
+  const entry = g.json.result;
+  const a = await http(svc.url, 'POST', '/api/apply', { projectId, resultId: entry.id });
+  if (!a.ok) return { ok: false, code: 'APPLY_FAILED', error: a.error };
+  return { ok: true, applied: a.json.applied || '已应用', entryKind: entry.kind, action, entry };
+}
+
+function outputView(latest) {
+  return (latest || []).map((o, i) => ({
+    n: i + 1, cap: o.cap, action: o.action, label: o.label, chars: (o.content || '').length,
+    preview: (o.content || '').slice(0, 220) + ((o.content || '').length > 220 ? '…' : ''),
+    full: o.content,
+  }));
+}
+
+const CAP_ACTIONS = {
+  analyze: 'content_analyze', imitate: 'content_imitate', continue: 'content_continue',
+  rewrite: 'content_rewrite', doc: 'doc_resolution', email: 'email_cold',
+};
+
 // ---------------- 工具定义 ----------------
 const defs = [
   {
@@ -490,6 +542,177 @@ const defs = [
   },
 ];
 
+// ---------------- 能力工作台工具（content_doc_email） ----------------
+
+const capDefs = [
+  {
+    name: 'novel_forge_capabilities',
+    description:
+      '列出 NovelForge 引擎当前可用的「能力」：小说创作(novel)、内容仿写/续写/改写(content)、' +
+      '公文·安理会决议仿写(doc)、学术套磁邮件(email)，以及每个能力提供的生成动作。' +
+      '当用户想做小说之外的长文创作（仿写/续写/改写/公文/邮件）时，先用本工具确认能力并创建对应项目。',
+    parameters: { type: 'object', properties: {} },
+    async execute(args, cx) {
+      const svc = await withService(cx.ctx);
+      if (svc.error) return { ok: false, error: svc.error };
+      const r = await http(svc.url, 'GET', '/api/capabilities');
+      if (!r.ok) return { ok: false, error: r.error };
+      return { ok: true, capabilities: r.json.capabilities.map((c) => ({ id: c.id, name: c.name, label: c.label, kind: c.kind, actions: c.actions.map((a) => a.key) })) };
+    },
+  },
+  {
+    name: 'novel_forge_cap_create',
+    description:
+      '在一个「能力工作台」下新建项目：cap 取 content(内容仿写/续写/改写)、doc(安理会决议)、email(套磁邮件)。' +
+      '返回项目 id 供后续 cap_set_source / cap_analyze / cap_run 使用。小说创作请用 novel_forge_new_project。',
+    parameters: {
+      type: 'object',
+      properties: {
+        cap: { type: 'string', enum: ['content', 'doc', 'email'], description: '能力 id' },
+        title: { type: 'string', description: '项目名/标题' },
+        desc: { type: 'string', description: '一句话说明（可选）' },
+        language: { type: 'string', description: '输出语言，如 zh/en/fr/ru/es/pt（可选）' },
+      },
+      required: ['cap', 'title'],
+    },
+    async execute(args, cx) {
+      const cap = String(args.cap || '');
+      const allowed = ['content', 'doc', 'email'];
+      if (!allowed.includes(cap)) return { ok: false, error: '未知能力：' + cap + '（可用 content/doc/email）' };
+      const svc = await withService(cx.ctx);
+      if (svc.error) return { ok: false, error: svc.error };
+      const r = await http(svc.url, 'POST', '/api/projects', { name: String(args.title || '').trim(), desc: String(args.desc || '').trim(), cap });
+      if (!r.ok) return { ok: false, error: r.error };
+      const p = r.json.project;
+      if (args.language) {
+        await http(svc.url, 'PUT', '/api/projects/' + encodeURIComponent(p.id) + '/workspace', { language: String(args.language) });
+      }
+      return { ok: true, projectId: p.id, project: capBrief(p), next: '用 novel_forge_cap_set_source 写入源文本，再 novel_forge_cap_analyze / novel_forge_cap_run' };
+    },
+  },
+  {
+    name: 'novel_forge_cap_set_source',
+    description:
+      '向能力项目写入「源文本/草稿/任务」与参数（source 为文本，params 为对象，如 doc.topic、email.recipient）。' +
+      'content 能力通常先把用户上传/粘贴的原文写入 source，再分析/仿写/续写/改写。',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: '能力项目 id' },
+        text: { type: 'string', description: '源文本/原文/草稿内容' },
+        title: { type: 'string', description: '源文本标题（可选）' },
+        lang: { type: 'string', description: '源文本语言（可选）' },
+        params: { type: 'object', description: '能力专属参数（可选，如 {"topic":"…","recipient":"…"}）' },
+      },
+      required: ['projectId', 'text'],
+    },
+    async execute(args, cx) {
+      const p = await readCap(cx, args.projectId);
+      if (!p) return { ok: false, error: '项目不存在：' + args.projectId };
+      const svc = await withService(cx.ctx);
+      if (svc.error) return { ok: false, error: svc.error };
+      const body = {
+        source: [{ id: (p.workspace.source[0] && p.workspace.source[0].id) || 's_', title: String(args.title || ''), text: String(args.text || ''), lang: String(args.lang || ''), meta: (p.workspace.source[0] && p.workspace.source[0].meta) || {} }],
+      };
+      if (args.params) body.params = args.params;
+      const r = await http(svc.url, 'PUT', '/api/projects/' + encodeURIComponent(args.projectId) + '/workspace', body);
+      if (!r.ok) return { ok: false, error: r.error };
+      return { ok: true, projectId: args.projectId, sourceChars: String(args.text || '').length, next: 'novel_forge_cap_analyze 分析，或 novel_forge_cap_run 直接仿写/续写/改写' };
+    },
+  },
+  {
+    name: 'novel_forge_cap_analyze',
+    description:
+      '分析能力项目的源文本，返回题材/文风/结构/人物/主题/语言的结构化判定（JSON），写入项目。' +
+      '用于「阅读上传内容」并提炼可供仿写/续写/改写的锚点。自动追加在源文本 meta 上。',
+    parameters: {
+      type: 'object',
+      properties: { projectId: { type: 'string', description: '能力项目 id' } },
+      required: ['projectId'],
+    },
+    async execute(args, cx) {
+      const p = await readCap(cx, args.projectId);
+      if (!p) return { ok: false, error: '项目不存在：' + args.projectId };
+      const r = await capGen(cx, CAP_ACTIONS.analyze, {}, args.projectId);
+      if (!r.ok) return r;
+      const pm = (p.workspace.source[0] && p.workspace.source[0].meta && p.workspace.source[0].meta.analysis) || {};
+      return { ok: true, analysis: pm, applied: r.applied, next: 'novel_forge_cap_run（mode=imitate/continue/rewrite）' };
+    },
+  },
+  {
+    name: 'novel_forge_cap_run',
+    description:
+      '在能力项目上执行一个生成动作并返回全文预览：mode=imitate 仿写 / continue 续写 / rewrite 改写 / doc 安理会决议 / email 套磁邮件。' +
+      'instruction 为额外指令；输出追加到项目 outputs 列表（续写会同时更新源文本）。结果有字数上限，可再用 novel_forge_cap_read 读完整版。',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: '能力项目 id' },
+        mode: { type: 'string', enum: ['imitate', 'continue', 'rewrite', 'doc', 'email'], description: '生成动作' },
+        instruction: { type: 'string', description: '额外指令（如：/ 改得更正式 / 换第一人称 / 主题改为… / 论文方向为…）' },
+      },
+      required: ['projectId', 'mode'],
+    },
+    async execute(args, cx) {
+      const mode = String(args.mode || '');
+      const action = CAP_ACTIONS[mode];
+      if (!action) return { ok: false, error: '未知 mode：' + mode + '（可用 imitate/continue/rewrite/doc/email）' };
+      const p = await readCap(cx, args.projectId);
+      if (!p) return { ok: false, error: '项目不存在：' + args.projectId };
+      const r = await capGen(cx, action, { instruction: args.instruction ? String(args.instruction) : undefined }, args.projectId);
+      if (!r.ok) return r;
+      // 读回 outputs 最新一条
+      const after = await readCap(cx, args.projectId);
+      const outs = (after && after.workspace && after.workspace.outputs) || [];
+      const last = outs[outs.length - 1];
+      const content = (last && last.content) || '';
+      return {
+        ok: true, mode, applied: r.applied, action, projectId: args.projectId,
+        outputIndex: outs.length, chars: content.length,
+        preview: content.slice(0, 400) + (content.length > 400 ? '\n…（已截断，请用 novel_forge_cap_read 读完整版）' : ''),
+      };
+    },
+  },
+  {
+    name: 'novel_forge_cap_read',
+    description:
+      '读取能力项目状态：brief 概览 / source 源文本与分析 / outputs 输出列表（可指定 index 看完整内容）。' +
+      '用于会话内审读结果做下一步决策。',
+    parameters: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'string', description: '能力项目 id' },
+        section: { type: 'string', enum: ['brief', 'source', 'outputs'], description: '默认 brief' },
+        index: { type: 'integer', description: 'section=outputs 时指定第几条（1-based）' },
+        limitChars: { type: 'integer', description: '单条返回上限（默认 12000）' },
+      },
+      required: ['projectId'],
+    },
+    async execute(args, cx) {
+      const p = await readCap(cx, args.projectId);
+      if (!p) return { ok: false, error: '项目不存在：' + args.projectId };
+      const s = args.section || 'brief';
+      const ws = p.workspace;
+      if (s === 'source') {
+        const src = ws.source[0] || {};
+        return { ok: true, title: src.title, chars: (src.text || '').length, text: src.text, lang: src.lang, analysis: src.meta && src.meta.analysis };
+      }
+      if (s === 'outputs') {
+        const outs = ws.outputs || [];
+        const limit = Math.max(800, Math.min(40000, Number(args.limitChars) || 12000));
+        if (args.index) {
+          const o = outs[Number(args.index) - 1];
+          if (!o) return { ok: false, error: '找不到第 ' + args.index + ' 条输出（共 ' + outs.length + ' 条）' };
+          const content = o.content || '';
+          return { ok: true, n: Number(args.index), cap: o.cap, action: o.action, label: o.label, chars: content.length, truncated: content.length > limit, content: content.slice(0, limit) + (content.length > limit ? '\n…（已截断）' : '') };
+        }
+        return { ok: true, outputs: outputView(outs.slice(-50)) };
+      }
+      return { ok: true, project: capBrief(p) };
+    },
+  },
+];
+
 // ---------------- 插件入口 ----------------
 export function apply(ctx, config = {}) {
   const tools = ctx && ctx.tools;
@@ -500,7 +723,8 @@ export function apply(ctx, config = {}) {
   }
   const context = { ctx };
   const unregs = [];
-  for (const base of defs) {
+  const all = [...defs, ...capDefs];
+  for (const base of all) {
     const def = {
       name: base.name,
       description: base.description,
@@ -521,7 +745,7 @@ export function apply(ctx, config = {}) {
       log.error('工具注册失败：' + base.name + ' — ' + (e && e.message || e));
     }
   }
-  log.info(`已注册 ${unregs.length}/${defs.length} 个 novel_forge_* 工具`);
+  log.info(`已注册 ${unregs.length}/${all.length} 个 novel_forge_* 工具`);
   const cleanup = () => { for (const un of unregs) { try { un(); } catch { /* ignore */ } } };
   if (typeof ctx.effect === 'function') ctx.effect(cleanup);
   else if (typeof ctx.on === 'function') ctx.on('dispose', cleanup);
@@ -537,4 +761,4 @@ function safeLogger(scoped) {
   return { log: (...a) => call('log', ['info'], a), info: (...a) => call('info', ['log'], a), warn: (...a) => call('warn', [], a), error: (...a) => call('error', [], a) };
 }
 
-export { defs as __defs };
+export { defs as __defs, capDefs as __capDefs };

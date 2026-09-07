@@ -1,7 +1,7 @@
 // test-tools.mjs —— novel_forge_* 会话工具集端到端自测（模拟引擎）
 // 流程：独立拉起内嵌实例(临时数据) → apply(tools) 注册 → 按“写小说”路径依次调用各工具。
 import { launchNovelForge } from '../index.js';
-import { apply, __defs } from '../tools.js';
+import { apply, __defs, __capDefs } from '../tools.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -24,7 +24,7 @@ try {
   h = await launchNovelForge({ port: 0, dataDir: tmpData, startTimeoutMs: 20000 });
   ctx.novelForge = { status: 'running', url: h.url, start: async () => h, stop: async () => h.stop() };
   apply(ctx, {});
-  t('12 个工具已注册', regs.length === __defs.length && regs.length === 12, 'regs=' + regs.length);
+  t('18 个工具已注册（12 novel + 6 capability）', regs.length === __defs.length + __capDefs.length && regs.length === 18, 'regs=' + regs.length);
   const byName = (n) => regs.find((d) => d.name === n);
   const call = async (name, args) => {
     const def = byName(name);

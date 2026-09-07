@@ -1,5 +1,6 @@
-# NovelForge plugin layer: start the embedded novel-writing studio alongside DSH,
-# and expose novel_forge_* conversation tools so sessions can drive it.
+# NovelForge plugin layer: start the embedded writing studio alongside DSH,
+# and expose novel_forge_* conversation tools (novel 小说 + content 仿写/续写/改写
+# + doc 安理会决议 + email 学术套磁) so sessions can drive it as a multi-capability shell.
 - insert:
     - id: novel-forge
       name: dsh-novel-forge
