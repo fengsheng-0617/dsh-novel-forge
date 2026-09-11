@@ -27,7 +27,7 @@ Le moteur embarque un registre de capacités `capabilities.js` ; à la création
 
 | Capacité `cap` | Nom | Description | Action de génération |
 |---|---|---|---|
-| `novel` | Écriture de romans | idée→cadre→personnages→plan→écriture par chapitres→relecture→export (par défaut) | `idea/bible/characters/outline/chapter/audit_*` |
+| `novel` | Écriture de romans | idée→**guidage de route narrative**→cadre→personnages→plan→écriture par chapitres→relecture→export (par défaut) | `idea/route/bible/characters/outline/chapter/audit_*` |
 | `content` | Contenu textuel | coller le texte source → analyser → imiter / continuer / réécrire | `content_analyze / content_imitate / content_continue / content_rewrite` |
 | `doc` | Document officiel | rédaction de résolution du Conseil de sécurité de l'ONU | `doc_resolution` |
 | `email` | Communication académique | rédaction d'e-mails académiques de prise de contact | `email_cold` |
@@ -64,23 +64,46 @@ dsh --patch F:\typing\novel-forge-plugin\cordis.patch.yml --patch-argv
 | `ctx.novelForge.describe()` | Informations sur l'application et journaux récents |
 | `ctx.novelForge.capabilities()` | Liste des capacités (novel/content/doc/email et leurs actions) |
 
-### Outils de conversation pour romans (novel_forge_*, 12 au total)
+### Outils de conversation pour romans (novel_forge_*, 14 au total)
 
 L'agent hôte les appelle automatiquement dès qu'il détecte une intention d'écriture de roman ; **tout le travail s'effectue dans la conversation, sans ouvrir de navigateur**.
 
+> **⚠ Guidage obligatoire (logique d'appel de ce plugin)** : quelle que soit la quantité de contenu fournie par l'utilisateur —
+> même une seule phrase ou un seul paragraphe — le modèle doit d'abord produire **2 à 5 « route narrative + plan d'ensemble »
+> candidates** (`novel_forge_route_plan`), les présenter toutes intégralement à l'utilisateur pour qu'il choisisse
+> (par numéro / route personnalisée / autorisation explicite donnée à l'IA de choisir), puis enregistrer la route retenue
+> avec `novel_forge_choose_route`.
+> **Tant qu'aucune route n'est choisie, `novel_forge_develop_project(stage=outline)` et `novel_forge_chain(mode=full)`
+> renvoient directement `NEED_ROUTE` et refusent de s'exécuter** (seule une demande explicite de l'utilisateur de
+> « passer le guidage » autorise `allowUnrouted=true`).
+> La route choisie est injectée par le moteur dans le prompt du plan (`{{routeText}}`), de sorte que le plan de tout le
+> livre s'articule toujours autour de la même route, sans partir dans tous les sens.
+>
+> Deux détails : ① sans choix, `novel_forge_choose_route` renvoie `NEED_CHOICE` ; l'usage de `delegate` exige les mots
+> d'autorisation de l'utilisateur (`note`), sinon la réponse est `NEED_AUTHORIZATION` — le modèle ne peut pas décider à la
+> place de l'utilisateur.
+> ② lorsque le moteur ne dispose que du **moteur de simulation hors ligne** (aucun modèle réel configuré), les candidats
+> sont produits par le **modèle de la session lui-même** (`mode:'session'`, avec spécification des champs), afin d'éviter
+> les textes de substitution « (simulation) » ; il suffit alors de passer les candidats auto-produits à
+> `choose_route.routes` pour les enregistrer.
+>
+> Ordre d'appel recommandé : `status → new_project → seed_idea → `**`route_plan → (choix de l'utilisateur) → choose_route`**` → develop(flesh/world/characters/outline) → write_chapter → audit → export`
+
 | Outil | Usage |
 |---|---|
-| `novel_forge_status` | État du moteur + liste des projets (généralement la première étape) |
+| `novel_forge_status` | État du moteur + liste des projets (avec, pour chaque projet, l'état de sélection de la route narrative ; généralement la première étape) |
 | `novel_forge_new_project` | Créer une nouvelle œuvre (renvoie `projectId`) |
-| `novel_forge_seed_idea` | Consigne l'idée de l'utilisateur dans une carte d'idées |
+| `novel_forge_seed_idea` | Consigne l'idée de l'utilisateur dans une carte d'idées (un seul paragraphe est accepté tel quel) |
 | `novel_forge_ideate` | Remue-méninges IA des idées candidates (après sélection, seed) |
-| `novel_forge_develop_project` | Avancer de phase : flesh/world/characters/outline/audit (les écrasements exigent confirmation) |
-| `novel_forge_read_project` | Lire la progression/le plan/les personnages/**le texte des chapitres**, pour relecture et décision dans la conversation |
+| `novel_forge_route_plan` | **Guidage obligatoire** : produit 2 à 5 « route narrative + plan d'ensemble » candidates (plan d'ensemble / itinéraire par étapes / escalade du conflit / direction de fin / risques + recommandation IA) ; bascule sur des candidats produits par la session lorsque le moteur est le moteur de simulation hors ligne (avec spécification des champs) |
+| `novel_forge_choose_route` | Enregistre la route choisie : `index` (numéro choisi par l'utilisateur) / `custom` (route personnalisée de l'utilisateur) / `delegate` (exige les mots d'autorisation de l'utilisateur dans `note`) ; `routes` permet d'enregistrer des candidats auto-produits |
+| `novel_forge_develop_project` | Avancer de phase : flesh/world/characters/outline/audit (outline exige d'abord une route choisie ; les écrasements exigent confirmation) |
+| `novel_forge_read_project` | Lire la progression/le plan/les personnages/**la route narrative**/le texte des chapitres, pour relecture et décision dans la conversation |
 | `novel_forge_write_chapter` | Écrire le texte du chapitre N et archiver automatiquement la mémoire (renvoie l'aperçu du texte ; les chapitres déjà écrits exigent confirmation) |
 | `novel_forge_edit_chapter` | Peaufiner un chapitre déjà écrit : rewrite/réécrire · polish/peaufiner · continue/continuer · summarize/archiver |
-| `novel_forge_extend_outline` | Ajouter N chapitres au plan (étend automatiquement les chapitres en poursuivant une œuvre longue) |
-| `novel_forge_chain` | Sans surveillance : full=compléter jusqu'à l'œuvre entière / write=écrire les chapitres restants |
-| `novel_forge_export` | Exportation md/manuscript/txt/json ; **le texte intégral revient directement dans la conversation** (peut être tronqué) |
+| `novel_forge_extend_outline` | Ajouter N chapitres au plan (étend automatiquement les chapitres en poursuivant une œuvre longue, en restant sur la route choisie) |
+| `novel_forge_chain` | Sans surveillance : full=compléter jusqu'à l'œuvre entière (exige une route choisie) / write=écrire les chapitres restants |
+| `novel_forge_export` | Exportation md/manuscript/txt/json ; **le texte intégral revient directement dans la conversation** (peut être tronqué ; le brouillon contient la route narrative) |
 | `novel_forge_remove_project` | Supprimer un projet (exige confirmation de l'utilisateur) |
 
 ### Outils de conversation pour capacités (capability_*, nouveaux)
@@ -96,7 +119,7 @@ Ils gèrent les travaux textuels autres que les romans. Tout s'effectue dans la 
 | `novel_forge_cap_run` | Exécuter imitate/continue/rewrite/doc/email ; renvoie l'aperçu |
 | `novel_forge_cap_read` | Lire la vue d'ensemble du projet / le texte source / la liste des sorties (possibilité de préciser index pour voir l'intégralité) |
 
-Tous les résultats des outils portent la sémantique `ok/code/error` (telle que `NEED_CONFIRM`, etc.) ; le modèle s'en sert pour demander confirmation à l'utilisateur et ne remplace jamais silencieusement une création existante.
+Tous les résultats des outils portent la sémantique `ok/code/error` (telle que `NEED_CONFIRM`, `NEED_ROUTE`, `NEED_CHOICE`, `NEED_AUTHORIZATION`, etc.) ; le modèle s'en sert pour demander confirmation à l'utilisateur, sans jamais remplacer silencieusement une création existante ni décider à sa place.
 
 ### Options configurables (cordis.patch.yml → config)
 
@@ -117,7 +140,8 @@ Tous les résultats des outils portent la sémantique `ok/code/error` (telle que
 ### Autocontrôle
 
 ```sh
-node scripts/test-standalone.mjs   # cycle de vie complet de launchNovelForge
+node scripts/test-standalone.mjs   # cycle de vie complet de launchNovelForge (enregistrement du modèle et de l'action de route inclus)
 node scripts/test-apply.mjs        # point d'entrée apply() (enregistrement du service/démarrage et arrêt)
+node scripts/test-tools.mjs        # suite d'outils de bout en bout (dont le verrou « pas de route ⇒ plan refusé »)
 node scripts/engine-mirror.mjs verify   # vérification d'écart nul du miroir du moteur
 ```

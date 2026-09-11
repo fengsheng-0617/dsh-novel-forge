@@ -28,7 +28,7 @@ capability goes through the same unified generation/apply engine:
 
 | Capability `cap` | Name | Purpose | Generation actions |
 |---|---|---|---|
-| `novel` | Novel writing | idea→setting→characters→outline→chapter writing→review→export (default) | `idea/bible/characters/outline/chapter/audit_*` |
+| `novel` | Novel writing | idea→**story-route guidance**→bible→characters→outline→writing→review→export (default) | `idea/route/bible/characters/outline/chapter/audit_*` |
 | `content` | Text content | upload source → analyze → imitate / continue / rewrite | `content_analyze / content_imitate / content_continue / content_rewrite` |
 | `doc` | Formal document | UN Security Council resolution imitation | `doc_resolution` |
 | `email` | Academic communication | Academic cold-email editing | `email_cold` |
@@ -67,24 +67,43 @@ dsh --patch F:\typing\novel-forge-plugin\cordis.patch.yml --patch-argv
 | `ctx.novelForge.describe()` | App information and recent logs |
 | `ctx.novelForge.capabilities()` | List of capabilities (novel/content/doc/email and their actions) |
 
-## Novel session tools (novel_forge_*, 12 in total)
+## Novel session tools (novel_forge_*, 14 in total)
 
 The host Agent calls these automatically when it detects novel-writing intent; **all work happens inside the session,
 no browser needed**.
 
+> **⚠ Mandatory guidance (this plugin's calling logic)**: whatever the user gives — even a single sentence or one
+> paragraph — the model must first produce **2–5 "story route + outline approach" options**
+> (`novel_forge_route_plan`), show every option to the user, ask them to choose (by number / their own custom route /
+> explicitly delegating), and record the choice with `novel_forge_choose_route`.
+> **Until a route is chosen, `novel_forge_develop_project(stage=outline)` and `novel_forge_chain(mode=full)` return
+> `NEED_ROUTE` and refuse to run** (only an explicit user request to skip guidance may pass `allowUnrouted=true`).
+> The chosen route is injected into the outline prompt (`{{routeText}}`), so the whole book stays on one course
+> instead of drifting.
+>
+> Two details: ① with no choice at all, `novel_forge_choose_route` returns `NEED_CHOICE`, and `delegate` requires the
+> user's own authorization wording in `note` (otherwise `NEED_AUTHORIZATION`) — the model may not decide for the user.
+> ② When the engine runs only the **offline mock provider**, the options are authored by the **session model instead**
+> (`mode:'session'`, with a field spec), so you never get "(mock)" placeholder text; pass your authored options through
+> `choose_route.routes` to store them.
+>
+> Recommended order: `status → new_project → seed_idea → `**`route_plan → (user chooses) → choose_route`**` → develop(flesh/world/characters/outline) → write_chapter → audit → export`
+
 | Tool | Purpose |
 |---|---|
-| `novel_forge_status` | Engine status + list of projects (usually the first step) |
+| `novel_forge_status` | Engine status + list of projects (including each project's route status; usually the first step) |
 | `novel_forge_new_project` | Create a new work (returns the projectId) |
-| `novel_forge_seed_idea` | Write the user's idea into an idea card |
+| `novel_forge_seed_idea` | Write the user's idea into an idea card (a single paragraph is accepted as-is) |
 | `novel_forge_ideate` | AI brainstorming of candidate ideas (seed after choosing one) |
-| `novel_forge_develop_project` | Advance a stage: flesh/world/characters/outline/audit (overwriting requires confirmation) |
-| `novel_forge_read_project` | Read progress/outline/characters/**chapter full text** for in-session review and decisions |
+| `novel_forge_route_plan` | **Mandatory guidance**: produce 2–5 "story route + outline approach" options (approach / stage-by-stage route / escalating conflict / ending / risks + AI recommendation); falls back to session-authored options when the engine only has the mock provider |
+| `novel_forge_choose_route` | Record the chosen route: `index` (user's pick) / `custom` (user's own route) / `delegate` (requires the user's authorization wording in `note`); can store session-authored candidates via `routes` |
+| `novel_forge_develop_project` | Advance a stage: flesh/world/characters/outline/audit (outline requires a chosen route first; overwriting requires confirmation) |
+| `novel_forge_read_project` | Read progress/outline/characters/**story route**/chapter full text for in-session review and decisions |
 | `novel_forge_write_chapter` | Write the Nth chapter's full text and archive it to memory automatically (returns a full-text preview; already-written chapters require confirmation) |
 | `novel_forge_edit_chapter` | Refine a written chapter: rewrite / polish / continue / summarize-archive |
-| `novel_forge_extend_outline` | Append N chapters to the outline (auto-extends when continuing a long work) |
-| `novel_forge_chain` | Unattended: full=fill in to a complete book / write=finish the remaining chapters |
-| `novel_forge_export` | Export as md/manuscript/txt/json, **full text returned directly into the session** (may be truncated) |
+| `novel_forge_extend_outline` | Append N chapters to the outline (auto-extends when continuing a long work, staying on the chosen route) |
+| `novel_forge_chain` | Unattended: full=fill in to a complete book (needs a chosen route) / write=finish the remaining chapters |
+| `novel_forge_export` | Export as md/manuscript/txt/json, **full text returned directly into the session** (may be truncated; the draft includes the story route) |
 | `novel_forge_remove_project` | Delete a project (requires user confirmation) |
 
 ## Capability session tools (capability_*, newly added)
@@ -100,8 +119,8 @@ Handle text work other than novels. Everything is done inside the session.
 | `novel_forge_cap_run` | Run imitate/continue/rewrite/doc/email and return a preview |
 | `novel_forge_cap_read` | Read the project overview / source text / output list (pass an index to see the full item) |
 
-All tool results carry `ok/code/error` semantics (`NEED_CONFIRM` etc.), so the model confirms with the user rather than
-silently overwriting existing work.
+All tool results carry `ok/code/error` semantics (`NEED_CONFIRM`, `NEED_ROUTE`, `NEED_CHOICE`, `NEED_AUTHORIZATION` etc.),
+so the model confirms with the user rather than silently overwriting existing work or deciding for them.
 
 ## Configurable options (cordis.patch.yml → config)
 
@@ -127,7 +146,8 @@ silently overwriting existing work.
 ## Self-test
 
 ```sh
-node scripts/test-standalone.mjs   # full launchNovelForge lifecycle
+node scripts/test-standalone.mjs   # full launchNovelForge lifecycle (route template/action registration included)
 node scripts/test-apply.mjs        # apply() entry (service register/start-stop)
+node scripts/test-tools.mjs        # end-to-end tool suite (incl. the "no route ⇒ outline refused" gate)
 node scripts/engine-mirror.mjs verify   # engine-mirror zero-drift check
 ```

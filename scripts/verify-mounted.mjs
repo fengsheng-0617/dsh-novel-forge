@@ -52,9 +52,11 @@ console.log('== 2 出厂内容 ==');
 r = await req(base, '/api/projects');
 t('示例项目《雾港来信》在位', r.json.projects.some((p) => p.id === 'nf_demo_fogport'));
 r = await req(base, '/api/settings');
-t('模板 18 套 + 厂商 12 家', (r.json.settings.templates || []).length >= 17 && (r.json.settings.providers || []).length >= 11);
+t('模板 25 套 + 厂商 12 家', (r.json.settings.templates || []).length >= 24 && (r.json.settings.providers || []).length >= 11);
+t('含故事路线模板 t_route_plan', (r.json.settings.templates || []).some((x) => x.key === 't_route_plan'));
 r = await req(base, '/api/actions');
-t('生成动作 18 个', (r.json.actions || []).length >= 17);
+t('生成动作 19 个', (r.json.actions || []).length >= 18);
+t('含 route_plan 动作', (r.json.actions || []).some((x) => x.key === 'route_plan'));
 r = await req(base, '/api/pipeline/status');
 t('流水线状态接口', r.json.pipeline && r.json.pipeline.status === 'idle');
 

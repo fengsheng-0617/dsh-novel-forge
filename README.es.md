@@ -27,7 +27,7 @@ El motor incluye un registro de capacidades `capabilities.js`; al crear un proye
 
 | Capacidad `cap` | Nombre | Descripción | Acción de generación |
 |---|---|---|---|
-| `novel` | Escritura de novelas | idea→escenario→personajes→esquema→escritura por capítulos→revisión→exportación (predeterminado) | `idea/bible/characters/outline/chapter/audit_*` |
+| `novel` | Escritura de novelas | idea→**ruta narrativa (planteamiento del esquema)**→escenario→personajes→esquema→escritura por capítulos→revisión→exportación (predeterminado) | `idea/route/bible/characters/outline/chapter/audit_*` |
 | `content` | Contenido de texto | pegar el texto original → analizar → imitar / continuar / reescribir | `content_analyze / content_imitate / content_continue / content_rewrite` |
 | `doc` | Formato de documento oficial | redacción de resolución del Consejo de Seguridad de la ONU | `doc_resolution` |
 | `email` | Comunicación académica | edición de correos académicos de contacto | `email_cold` |
@@ -64,23 +64,39 @@ dsh --patch F:\typing\novel-forge-plugin\cordis.patch.yml --patch-argv
 | `ctx.novelForge.describe()` | Información de la aplicación y registros recientes |
 | `ctx.novelForge.capabilities()` | Lista de capacidades (novel/content/doc/email y sus acciones) |
 
-### Herramientas de conversación para novelas (novel_forge_*, 12 en total)
+### Herramientas de conversación para novelas (novel_forge_*, 14 en total)
 
 El agente anfitrión las llama automáticamente al detectar la intención de escribir una novela; **todo el trabajo se realiza dentro de la conversación, sin necesidad de abrir un navegador**.
 
+> **⚠ Guía obligatoria (la lógica de llamada de este complemento)**: sea cual sea el contenido que dé el usuario —aunque sea una sola frase o un solo párrafo—,
+> el modelo debe producir primero **2~5 candidatas de «ruta narrativa (planteamiento del esquema)»** (`novel_forge_route_plan`), mostrárselas todas al usuario pidiéndole que elija
+> (por número / su propia ruta / delegando explícitamente en la IA), y guardar la ruta seleccionada con `novel_forge_choose_route`.
+> **Mientras no haya una ruta seleccionada, `novel_forge_develop_project(stage=outline)` y `novel_forge_chain(mode=full)` devuelven
+> `NEED_ROUTE` y se niegan a ejecutarse** (solo si el usuario pide explícitamente «omitir la guía» se puede pasar `allowUnrouted=true`).
+> La ruta seleccionada la inyecta el motor en el prompt del esquema (`{{routeText}}`), de modo que el esquema de toda la obra gira siempre en torno a la misma ruta y no se dispersa.
+>
+> Dos detalles: ① si no hay ninguna elección, `novel_forge_choose_route` devuelve `NEED_CHOICE`; al usar `delegate` hay que adjuntar las palabras textuales
+> de autorización del usuario (`note`), de lo contrario devuelve `NEED_AUTHORIZATION` — el modelo no puede decidir por el usuario.
+> ② cuando el motor solo dispone del **motor de simulación sin conexión** (sin un modelo real configurado), las candidatas las produce el **propio modelo de la conversación**
+> (`mode:'session'`, con especificación de campos), para evitar recibir textos de relleno como «(simulación)»; en ese caso, basta con guardar las candidatas propias mediante `choose_route.routes`.
+>
+> Orden de llamada recomendado: `status → new_project → seed_idea → `**`route_plan → (el usuario elige) → choose_route`**` → develop(flesh/world/characters/outline) → write_chapter → audit → export`
+
 | Herramienta | Uso |
 |---|---|
-| `novel_forge_status` | Estado del motor + lista de proyectos (normalmente el primer paso) |
+| `novel_forge_status` | Estado del motor + lista de proyectos (incluye el estado de selección de ruta de cada proyecto; normalmente el primer paso) |
 | `novel_forge_new_project` | Crear una nueva obra (devuelve `projectId`) |
-| `novel_forge_seed_idea` | Guarda la idea del usuario en una tarjeta de ideas |
+| `novel_forge_seed_idea` | Guarda la idea del usuario en una tarjeta de ideas (también se acepta un solo párrafo) |
 | `novel_forge_ideate` | Lluvia de ideas con IA de posibles ideas (tras seleccionarla, seed) |
-| `novel_forge_develop_project` | Avanzar de fase: flesh/world/characters/outline/audit (los sobrescritos requieren confirmación) |
-| `novel_forge_read_project` | Leer el progreso/esquema/personajes/**texto de capítulos**, para su revisión y decisión dentro de la conversación |
+| `novel_forge_route_plan` | **Guía obligatoria**: produce 2~5 candidatas de «ruta narrativa (planteamiento del esquema)» (planteamiento / ruta por etapas / escalada del conflicto / desenlace / riesgos + recomendación de la IA); si el motor es el de simulación sin conexión, pasan a producirlas la propia conversación (con especificación de campos) |
+| `novel_forge_choose_route` | Guarda la ruta seleccionada: `index` (el usuario eligió un número) / `custom` (ruta definida por el usuario) / `delegate` (requiere adjuntar las palabras textuales de autorización del usuario en `note`); con `routes` se pueden guardar las candidatas propias |
+| `novel_forge_develop_project` | Avanzar de fase: flesh/world/characters/outline/audit (outline requiere una ruta seleccionada primero; los sobrescritos requieren confirmación) |
+| `novel_forge_read_project` | Leer el progreso/esquema/personajes/**ruta narrativa**/texto de capítulos, para su revisión y decisión dentro de la conversación |
 | `novel_forge_write_chapter` | Escribir el texto del capítulo N y archivar la memoria automáticamente (devuelve la vista previa del texto; los capítulos ya escritos requieren confirmación) |
 | `novel_forge_edit_chapter` | Pulido fino de capítulos ya escritos: rewrite / polish / continue / summarize |
-| `novel_forge_extend_outline` | Añadir N capítulos al esquema (amplía automáticamente al continuar obras largas) |
-| `novel_forge_chain` | Sin supervisión: full=completar hasta la obra entera / write=escribir los capítulos restantes |
-| `novel_forge_export` | Exportación md/manuscript/txt/json; **el texto completo vuelve directamente a la conversación** (puede truncarse) |
+| `novel_forge_extend_outline` | Añadir N capítulos al esquema (amplía automáticamente al continuar obras largas, continuando la ruta seleccionada) |
+| `novel_forge_chain` | Sin supervisión: full=completar hasta la obra entera (requiere una ruta seleccionada) / write=escribir los capítulos restantes |
+| `novel_forge_export` | Exportación md/manuscript/txt/json; **el texto completo vuelve directamente a la conversación** (puede truncarse; el borrador incluye la ruta narrativa) |
 | `novel_forge_remove_project` | Eliminar un proyecto (requiere confirmación del usuario) |
 
 ### Herramientas de conversación para capacidades (capability_*, nuevas)
@@ -96,7 +112,7 @@ Gestionan el trabajo textual que no es novelas. Todo se realiza dentro de la con
 | `novel_forge_cap_run` | Ejecutar imitate/continue/rewrite/doc/email; devuelve la vista previa |
 | `novel_forge_cap_read` | Leer la vista general del proyecto / texto fuente / lista de salidas (se puede especificar index para ver el completo) |
 
-Todos los resultados de las herramientas llevan semántica `ok/code/error` (como `NEED_CONFIRM`, etc.); conforme a ello, el modelo pide confirmación al usuario y nunca sobrescribe silenciosamente una creación existente.
+Todos los resultados de las herramientas llevan semántica `ok/code/error` (como `NEED_CONFIRM`, `NEED_ROUTE`, `NEED_CHOICE`, `NEED_AUTHORIZATION`, etc.); conforme a ello, el modelo pide confirmación al usuario y nunca sobrescribe silenciosamente una creación existente ni decide por él.
 
 ### Opciones configurables (cordis.patch.yml → config)
 
@@ -117,7 +133,8 @@ Todos los resultados de las herramientas llevan semántica `ok/code/error` (como
 ### Autocomprobación
 
 ```sh
-node scripts/test-standalone.mjs   # ciclo de vida completo de launchNovelForge
+node scripts/test-standalone.mjs   # ciclo de vida completo de launchNovelForge (incluye el registro de la plantilla/acción de ruta)
 node scripts/test-apply.mjs        # entrada apply() (registro del servicio/arranque y parada)
+node scripts/test-tools.mjs        # conjunto de herramientas de extremo a extremo (incluye el control de «sin ruta seleccionada no se genera el esquema»)
 node scripts/engine-mirror.mjs verify   # verificación de desviación cero del espejo del motor
 ```

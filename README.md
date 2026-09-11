@@ -109,7 +109,7 @@ dsh --patch F:\typing\novel-forge-plugin\cordis.patch.yml --patch-argv
 | `novel_forge_cap_run` | 执行 imitate/continue/rewrite/doc/email，返回预览 |
 | `novel_forge_cap_read` | 读项目概览 / 源文本 / 输出列表（可指定 index 看完整） |
 
-工具结果均带 `ok/code/error` 语义（`NEED_CONFIRM` 等），模型据此向用户确认，不会静默覆盖已有创作。
+工具结果均带 `ok/code/error` 语义（`NEED_CONFIRM`、`NEED_ROUTE`、`NEED_CHOICE`、`NEED_AUTHORIZATION` 等），模型据此向用户确认，不会静默覆盖已有创作，也不会替用户拍板。
 
 ### 可配置项（cordis.patch.yml → config）
 

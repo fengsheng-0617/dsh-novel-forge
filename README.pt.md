@@ -28,7 +28,7 @@ e as diferentes capacidades passam pelo mesmo motor unificado de geração/aplic
 
 | Capacidade `cap` | Nome | Descrição | Ações de geração |
 |---|---|---|---|
-| `novel` | Criação de romance | ideia→bíblia→personagens→esboço→escrita por capítulos→revisão→exportação (padrão) | `idea/bible/characters/outline/chapter/audit_*` |
+| `novel` | Criação de romance | ideia→**orientação por rota narrativa**→bíblia→personagens→esboço→escrita por capítulos→revisão→exportação (padrão) | `idea/route/bible/characters/outline/chapter/audit_*` |
 | `content` | Conteúdo de texto | colar o texto original → analisar → imitar / continuar / reescrever | `content_analyze / content_imitate / content_continue / content_rewrite` |
 | `doc` | Documento formal | redação de resolução do Conselho de Segurança | `doc_resolution` |
 | `email` | Comunicação acadêmica | edição de e-mails acadêmicos de contato | `email_cold` |
@@ -66,24 +66,40 @@ dsh --patch F:\typing\novel-forge-plugin\cordis.patch.yml --patch-argv
 | `ctx.novelForge.describe()` | Informações do aplicativo e logs recentes |
 | `ctx.novelForge.capabilities()` | Lista de capacidades (novel/content/doc/email e ações) |
 
-### Ferramentas de conversa/sessão para romances (`novel_forge_*`, 12 no total)
+### Ferramentas de conversa/sessão para romances (`novel_forge_*`, 14 no total)
 
 O Agent hospedeiro as chama automaticamente ao detectar a intenção de criar um romance; **todo o trabalho
 é concluído dentro da sessão, sem necessidade de abrir um navegador**.
 
+> **⚠ Orientação obrigatória (a lógica de chamada deste plugin)**: não importa quanto conteúdo o usuário forneça — mesmo que seja só uma frase ou um parágrafo —,
+> é obrigatório primeiro produzir **2~5 candidatas de «rota narrativa + plano geral do esboço»** (`novel_forge_route_plan`), apresentá-las por completo ao usuário para que ele escolha
+> (por número / rota personalizada / autorizando explicitamente a IA a escolher) e só então gravar a rota selecionada com `novel_forge_choose_route`.
+> **Sem rota selecionada, `novel_forge_develop_project(stage=outline)` e `novel_forge_chain(mode=full)` retornam
+> `NEED_ROUTE` e recusam a execução** (somente quando o usuário pede explicitamente para «pular a orientação» é possível passar `allowUnrouted=true`).
+> A rota selecionada é injetada pelo motor no prompt do esboço (`{{routeText}}`), então o esboço do livro inteiro sempre se desenvolve em torno da mesma rota, sem se dispersar.
+>
+> Dois detalhes: ① sem nenhuma escolha, `novel_forge_choose_route` retorna `NEED_CHOICE`; usar `delegate` exige anexar as palavras de autorização do usuário
+> (`note`), caso contrário retorna `NEED_AUTHORIZATION` — o modelo não pode decidir no lugar do usuário.
+> ② quando o motor só tem o **motor de simulação offline** (nenhum modelo real configurado), as candidatas passam a ser **produzidas pelo próprio modelo da sessão** (`mode:'session'`, com a especificação dos campos),
+> evitando receber textos de preenchimento «(simulação)»; nesse caso, basta gravar as candidatas próprias junto em `choose_route.routes`.
+>
+> Ordem de chamada recomendada: `status → new_project → seed_idea → `**`route_plan → (o usuário escolhe) → choose_route`**` → develop(flesh/world/characters/outline) → write_chapter → audit → export`
+
 | Ferramenta | Uso |
 |---|---|
-| `novel_forge_status` | Status do motor + lista de projetos (normalmente o primeiro passo) |
+| `novel_forge_status` | Status do motor + lista de projetos (incluindo o status de rota selecionada de cada projeto, normalmente o primeiro passo) |
 | `novel_forge_new_project` | Criar nova obra (retorna projectId) |
-| `novel_forge_seed_idea` | Gravar a ideia do usuário no cartão de ideias |
+| `novel_forge_seed_idea` | Gravar a ideia do usuário no cartão de ideias (um parágrafo também é aceito) |
 | `novel_forge_ideate` | Brainstorming de ideias candidatas por IA (após escolha, faz seed) |
-| `novel_forge_develop_project` | Avançar fases: flesh/world/characters/outline/audit (sobrescrita exige confirmação) |
-| `novel_forge_read_project` | Ler progresso/esboço/personagens/**texto do capítulo**, para leitura e decisão dentro da sessão |
+| `novel_forge_route_plan` | **Orientação obrigatória**: produz 2~5 candidatas de «rota narrativa + plano geral do esboço» (plano geral/rota por etapas/escalada do conflito/desfecho/riscos + recomendação da IA); com o motor em simulação offline, passam a ser produzidas pela própria sessão (com a especificação dos campos) |
+| `novel_forge_choose_route` | Gravar a rota selecionada: `index` (número escolhido pelo usuário) / `custom` (rota personalizada do usuário) / `delegate` (exige as palavras de autorização do usuário em `note`); pode gravar candidatas próprias com `routes` |
+| `novel_forge_develop_project` | Avançar fases: flesh/world/characters/outline/audit (o outline exige primeiro a rota selecionada; sobrescrita exige confirmação) |
+| `novel_forge_read_project` | Ler progresso/esboço/personagens/**rota narrativa**/texto do capítulo, para leitura e decisão dentro da sessão |
 | `novel_forge_write_chapter` | Escrever o texto do capítulo N e arquivar a memória automaticamente (retorna pré-visualização do texto; capítulo já escrito exige confirmação) |
 | `novel_forge_edit_chapter` | Refinar capítulo já escrito: rewrite reescrever / polish aprimorar / continue continuar / summarize arquivar |
-| `novel_forge_extend_outline` | Acrescentar N capítulos ao esboço (expandir capítulos automaticamente ao continuar obras longas) |
-| `novel_forge_chain` | Sem supervisão: full=completar até a obra inteira / write=escrever os capítulos restantes |
-| `novel_forge_export` | Exportar md/manuscript/txt/json, **com o texto completo retornado direto para a sessão** (pode ser truncado) |
+| `novel_forge_extend_outline` | Acrescentar N capítulos ao esboço (expandir capítulos automaticamente ao continuar obras longas, mantendo a rota selecionada) |
+| `novel_forge_chain` | Sem supervisão: full=completar até a obra inteira (exige primeiro a rota selecionada) / write=escrever os capítulos restantes |
+| `novel_forge_export` | Exportar md/manuscript/txt/json, **com o texto completo retornado direto para a sessão** (pode ser truncado; o rascunho inclui a rota narrativa) |
 | `novel_forge_remove_project` | Excluir projeto (exige confirmação do usuário) |
 
 ### Ferramentas de conversa/sessão de capacidades (`capability_*`, novas)
@@ -99,8 +115,8 @@ Tratam do trabalho com texto fora de romances. Tudo concluído dentro da sessão
 | `novel_forge_cap_run` | Executar imitate/continue/rewrite/doc/email, retornando a pré-visualização |
 | `novel_forge_cap_read` | Ler a visão geral do projeto / texto-fonte / lista de saídas (pode indicar index para ver por inteiro) |
 
-Todos os resultados das ferramentas carregam semântica `ok/code/error` (como `NEED_CONFIRM` etc.);
-com base nisso o modelo confirma com o usuário e nunca sobrescreve silenciosamente uma criação existente.
+Todos os resultados das ferramentas carregam semântica `ok/code/error` (`NEED_CONFIRM`, `NEED_ROUTE`, `NEED_CHOICE`, `NEED_AUTHORIZATION` etc.);
+com base nisso o modelo confirma com o usuário e nunca sobrescreve silenciosamente uma criação existente nem decide no lugar dele.
 
 ### Itens configuráveis (`cordis.patch.yml` → config)
 
@@ -123,7 +139,8 @@ com base nisso o modelo confirma com o usuário e nunca sobrescreve silenciosame
 ### Autoteste
 
 ```sh
-node scripts/test-standalone.mjs   # ciclo de vida completo do launchNovelForge
+node scripts/test-standalone.mjs   # ciclo de vida completo do launchNovelForge (incluindo o registro do modelo/ação de rota)
 node scripts/test-apply.mjs        # ponto de entrada apply() (registro/inicialização e encerramento de serviço)
+node scripts/test-tools.mjs        # conjunto de ferramentas ponta a ponta (incluindo o portão «sem rota selecionada, o esboço é recusado»)
 node scripts/engine-mirror.mjs verify   # verificação de zero-drift do espelho do motor
 ```
