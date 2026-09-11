@@ -1,4 +1,4 @@
-# dsh-novel-forge —— DeepSeek Harness all-in-one AI creation toolkit (capability-wrapped)
+﻿# dsh-novel-forge —— DeepSeek Harness all-in-one AI creation toolkit (capability-wrapped)
 
 > **🌐 Languages** — [简体中文](README.md) · English · [Français](README.fr.md) · [Русский](README.ru.md) · [Español](README.es.md) · [Português](README.pt.md)
 > Updates: see [CHANGELOG](CHANGELOG.md)
@@ -46,8 +46,8 @@ Run when the `dsh` CLI is available (inside a source checkout this is `pnpm dsh`
 dsh plugin add F:\typing\novel-forge-plugin
 
 # 2) Pack it into a tarball for distribution (no build permission needed)
-pnpm pack   # produces dsh-novel-forge-0.3.0.tgz
-dsh plugin add ./dsh-novel-forge-0.3.0.tgz
+pnpm pack   # produces dsh-novel-forge-0.3.1.tgz
+dsh plugin add ./dsh-novel-forge-0.3.1.tgz
 
 # 3) Or try it directly as a --patch overlay (without opening a profile)
 dsh --patch F:\typing\novel-forge-plugin\cordis.patch.yml --patch-argv

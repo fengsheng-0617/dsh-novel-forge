@@ -1,4 +1,4 @@
-# dsh-novel-forge — универсальный AI-инструмент для творчества на DeepSeek Harness (обёртка в виде навыка/способности)
+﻿# dsh-novel-forge — универсальный AI-инструмент для творчества на DeepSeek Harness (обёртка в виде навыка/способности)
 
 > **🌐 Языки** — [简体中文](README.md) · [English](README.en.md) · [Français](README.fr.md) · Русский · [Español](README.es.md) · [Português](README.pt.md)
 > Обновления: см. [CHANGELOG](CHANGELOG.md)
@@ -42,8 +42,8 @@
 dsh plugin add F:\typing\novel-forge-plugin
 
 # 2) Упаковать в tarball для распространения (без прав на сборку)
-pnpm pack   # получим dsh-novel-forge-0.3.0.tgz
-dsh plugin add ./dsh-novel-forge-0.3.0.tgz
+pnpm pack   # получим dsh-novel-forge-0.3.1.tgz
+dsh plugin add ./dsh-novel-forge-0.3.1.tgz
 
 # 3) Или сразу опробовать как overlay через --patch (без открытия profile)
 dsh --patch F:\typing\novel-forge-plugin\cordis.patch.yml --patch-argv

@@ -24,7 +24,7 @@
 
 | 能力 `cap` | 名称 | 说明 | 生成动作 |
 |---|---|---|---|
-| `novel` | 小说创作 | 点子→设定→人物→大纲→逐章写作→审校→导出（默认） | `idea/bible/characters/outline/chapter/audit_*` |
+| `novel` | 小说创作 | 点子→**故事路线引导**→设定→人物→大纲→逐章写作→审校→导出（默认） | `idea/route/bible/characters/outline/chapter/audit_*` |
 | `content` | 文本内容 | 上传原文 → 分析 → 仿写 / 续写 / 改写 | `content_analyze / content_imitate / content_continue / content_rewrite` |
 | `doc` | 公文体例 | 联合国安理会决议仿写 | `doc_resolution` |
 | `email` | 学术沟通 | 学术套磁邮件编辑 | `email_cold` |
@@ -41,8 +41,8 @@
 dsh plugin add F:\typing\novel-forge-plugin
 
 # 2) 打包为 tarball 分发（无需构建权限）
-pnpm pack   # 得到 dsh-novel-forge-0.3.0.tgz
-dsh plugin add ./dsh-novel-forge-0.3.0.tgz
+pnpm pack   # 得到 dsh-novel-forge-0.3.1.tgz
+dsh plugin add ./dsh-novel-forge-0.3.1.tgz
 
 # 3) 或作为 --patch overlay 直接试用（不开 profile）
 dsh --patch F:\typing\novel-forge-plugin\cordis.patch.yml --patch-argv
@@ -61,23 +61,39 @@ dsh --patch F:\typing\novel-forge-plugin\cordis.patch.yml --patch-argv
 | `ctx.novelForge.describe()` | 应用信息与最近日志 |
 | `ctx.novelForge.capabilities()` | 能力清单（novel/content/doc/email 及动作） |
 
-### 小说会话工具（novel_forge_*，共 12 个）
+### 小说会话工具（novel_forge_*，共 14 个）
 
 宿主 Agent 检测到小说创作意图时自动调用；**全部工作在会话内完成，无需打开浏览器**。
 
+> **⚠ 强制引导（本插件的调用逻辑）**：无论用户给了多少内容——哪怕只有一句话、一段话——
+> 都必须先产出 **2~5 条「故事路线 + 大纲思路」候选**（`novel_forge_route_plan`），逐条完整展示给用户请其选择
+> （可选编号 / 自定义路线 / 明确授权 AI 选定），再用 `novel_forge_choose_route` 写入选定路线。
+> **未选定路线时 `novel_forge_develop_project(stage=outline)` 与 `novel_forge_chain(mode=full)` 会直接返回
+> `NEED_ROUTE` 拒绝执行**（仅当用户明确要求"跳过引导"才可传 `allowUnrouted=true`）。
+> 选定路线会被引擎注入大纲提示词（`{{routeText}}`），因此全书大纲始终围绕同一条路线展开，不会散乱。
+>
+> 两个细节：① 未做选择时 `novel_forge_choose_route` 返回 `NEED_CHOICE`；用 `delegate` 必须附上用户授权原话
+> （`note`），否则返回 `NEED_AUTHORIZATION`——模型不能替用户拍板。
+> ② 引擎只有**离线模拟引擎**（未配真实模型）时，候选改由**会话模型自己产出**（`mode:'session'`，附字段规范），
+> 避免拿到"（模拟）"占位文本；此时把自产候选通过 `choose_route.routes` 一并入库即可。
+>
+> 推荐调用顺序：`status → new_project → seed_idea → `**`route_plan →（用户选择）→ choose_route`**` → develop(flesh/world/characters/outline) → write_chapter → audit → export`
+
 | 工具 | 用途 |
 |---|---|
-| `novel_forge_status` | 引擎状态 + 项目清单（通常第一步） |
+| `novel_forge_status` | 引擎状态 + 项目清单（含每个项目的路线选定状态，通常第一步） |
 | `novel_forge_new_project` | 新建作品（返回 projectId） |
-| `novel_forge_seed_idea` | 把用户点子写入创意卡 |
+| `novel_forge_seed_idea` | 把用户点子写入创意卡（一段话也照收） |
 | `novel_forge_ideate` | AI 头脑风暴候选点子（选后 seed） |
-| `novel_forge_develop_project` | 推进阶段：flesh/world/characters/outline/audit（覆盖需确认） |
-| `novel_forge_read_project` | 读进度/大纲/角色/**章节正文**，供会话内审读与决策 |
+| `novel_forge_route_plan` | **强制引导**：产出 2~5 条「故事路线 + 大纲思路」候选（思路/阶段路线/冲突升级/结局/风险 + AI 推荐）；引擎为离线模拟引擎时改为会话自产（含字段规范） |
+| `novel_forge_choose_route` | 写入选定路线：`index`（用户选编号）/ `custom`（用户自定义）/ `delegate`（需附用户授权原话 `note`）；可用 `routes` 入库自产候选 |
+| `novel_forge_develop_project` | 推进阶段：flesh/world/characters/outline/audit（outline 需先选定路线；覆盖需确认） |
+| `novel_forge_read_project` | 读进度/大纲/角色/**故事路线**/章节正文，供会话内审读与决策 |
 | `novel_forge_write_chapter` | 写第 N 章正文并自动归档记忆（返回正文预览；已写章需确认） |
 | `novel_forge_edit_chapter` | 已写章精修：rewrite 重写 / polish 润色 / continue 续写 / summarize 归档 |
-| `novel_forge_extend_outline` | 大纲追加 N 章（续写长篇时自动扩章） |
-| `novel_forge_chain` | 无人值守：full=补齐到全本 / write=写完剩余章节 |
-| `novel_forge_export` | md/manuscript/txt/json 导出，**全文直接返回会话**（可截断） |
+| `novel_forge_extend_outline` | 大纲追加 N 章（续写长篇时自动扩章，延续已选定路线） |
+| `novel_forge_chain` | 无人值守：full=补齐到全本（需先选定路线）/ write=写完剩余章节 |
+| `novel_forge_export` | md/manuscript/txt/json 导出，**全文直接返回会话**（可截断；底稿含故事路线） |
 | `novel_forge_remove_project` | 删除项目（需用户确认） |
 
 ### 能力会话工具（capability_*，新增）
@@ -114,8 +130,9 @@ dsh --patch F:\typing\novel-forge-plugin\cordis.patch.yml --patch-argv
 ### 自测
 
 ```sh
-node scripts/test-standalone.mjs   # launchNovelForge 全生命周期
+node scripts/test-standalone.mjs   # launchNovelForge 全生命周期（含路线模板/动作注册）
 node scripts/test-apply.mjs        # apply() 入口（服务注册/启停）
+node scripts/test-tools.mjs        # 工具集端到端（含"未选定路线即拒绝出大纲"的门禁）
 node scripts/engine-mirror.mjs verify   # 引擎镜像零漂移校验
 ```
 
@@ -130,7 +147,7 @@ capabilities share the same generation/apply engine:
 
 | `cap` | Name | Purpose | Actions |
 |---|---|---|---|
-| `novel` | Novel writing | idea→bible→characters→outline→writing→review→export (default) | `idea/bible/characters/outline/chapter/audit_*` |
+| `novel` | Novel writing | idea→**story-route guidance**→bible→characters→outline→writing→review→export (default) | `idea/route/bible/characters/outline/chapter/audit_*` |
 | `content` | Text content | paste source → analyze → imitate / continue / rewrite | `content_analyze / content_imitate / content_continue / content_rewrite` |
 | `doc` | Formal document | UN Security Council resolution imitation | `doc_resolution` |
 | `email` | Academic comms | Academic cold-email editing | `email_cold` |
@@ -144,7 +161,7 @@ Chinese/English/French/Russian/Spanish/Portuguese (untranslated languages fall b
 ```sh
 dsh plugin add F:\typing\novel-forge-plugin   # local dir (debug)
 # or
-pnpm pack && dsh plugin add ./dsh-novel-forge-0.3.0.tgz
+pnpm pack && dsh plugin add ./dsh-novel-forge-0.3.1.tgz
 # or
 dsh --patch F:\typing\novel-forge-plugin\cordis.patch.yml --patch-argv
 ```
@@ -155,9 +172,22 @@ Exposes `ctx.novelForge.url/.status/.start()/.stop()/.describe()` plus `ctx.nove
 
 ### Session tools
 
-- **Novel**: `novel_forge_*` (12 tools, same as before).
+- **Novel**: `novel_forge_*` (14 tools).
 - **Capability**: `novel_forge_capabilities`, `novel_forge_cap_create`, `novel_forge_cap_set_source`,
   `novel_forge_cap_analyze`, `novel_forge_cap_run`, `novel_forge_cap_read`.
+
+> **Mandatory guidance (calling logic)**: whatever the user gives — even a single paragraph — the model must first
+> produce **2–5 "story route + outline approach" options** (`novel_forge_route_plan`), show them all to the user,
+> then record the choice with `novel_forge_choose_route` (by index / custom text / explicit delegation).
+> Until a route is chosen, `novel_forge_develop_project(stage=outline)` and `novel_forge_chain(mode=full)` return
+> `NEED_ROUTE` and refuse to run. The chosen route is injected into the outline prompt (`{{routeText}}`), so the
+> whole book stays on one course instead of drifting.
+>
+> Two details: ① with no choice, `novel_forge_choose_route` returns `NEED_CHOICE`, and `delegate` requires the user's
+> own authorization wording in `note` (otherwise `NEED_AUTHORIZATION`) — the model may not decide for the user.
+> ② When the engine runs only the **offline mock provider**, the options are authored by the **session model instead**
+> (`mode:'session'`, with a field spec), so you never get "(mock)" placeholder text; pass your authored options through
+> `choose_route.routes` to store them.
 
 All results carry `ok/code/error` semantics so the model confirms destructive actions with the user.
 
@@ -175,5 +205,6 @@ use only on trusted machine.
 ```sh
 node scripts/test-standalone.mjs
 node scripts/test-apply.mjs
+node scripts/test-tools.mjs
 node scripts/engine-mirror.mjs verify
 ```

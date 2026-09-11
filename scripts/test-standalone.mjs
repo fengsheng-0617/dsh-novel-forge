@@ -22,7 +22,13 @@ try {
   const pr = await (await fetch(h.url + '/api/projects')).json();
   t('首启自动创建示例项目', Array.isArray(pr.projects) && pr.projects.length === 1 && pr.projects[0].demo === true, JSON.stringify(pr.projects && pr.projects[0] && pr.projects[0].name));
   const se = await (await fetch(h.url + '/api/settings')).json();
-  t('厂商预设 12 家、模板 24 套', (se.settings.providers || []).length === 12 && (se.settings.templates || []).length === 24);
+  t('厂商预设 12 家、模板 25 套（含故事路线模板）', (se.settings.providers || []).length === 12 && (se.settings.templates || []).length === 25
+    && (se.settings.templates || []).some((x) => x.key === 't_route_plan'));
+  const ac = await (await fetch(h.url + '/api/actions')).json();
+  const routeAct = (ac.actions || []).find((x) => x.key === 'route_plan');
+  t('引擎注册 route_plan 动作', !!routeAct && routeAct.stage === 'idea', JSON.stringify(routeAct || null));
+  const tplOutline = (se.settings.templates || []).find((x) => x.key === 't_outline_generate');
+  t('大纲模板已注入 {{routeText}}（大纲遵循选定路线）', !!tplOutline && /routeText/.test(tplOutline.user), tplOutline && tplOutline.user.slice(0, 60));
   const st = await (await fetch(h.url + '/api/pipeline/status')).json();
   t('流水线状态接口可用', st.pipeline && st.pipeline.status === 'idle');
 

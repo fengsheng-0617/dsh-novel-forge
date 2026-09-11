@@ -1,4 +1,4 @@
-# dsh-novel-forge —— ferramenta de criação completa com IA do DeepSeek Harness (empacotada como capacidades)
+﻿# dsh-novel-forge —— ferramenta de criação completa com IA do DeepSeek Harness (empacotada como capacidades)
 
 > **🌐 Idiomas** — [简体中文](README.md) · [English](README.en.md) · [Français](README.fr.md) · [Русский](README.ru.md) · [Español](README.es.md) · Português
 > Novidades: ver [CHANGELOG](CHANGELOG.md)
@@ -46,8 +46,8 @@ Quando o CLI `dsh` estiver disponível (dentro do checkout do código-fonte, `pn
 dsh plugin add F:\typing\novel-forge-plugin
 
 # 2) Empacotar como tarball para distribuição (sem exigir permissão de build)
-pnpm pack   # gera dsh-novel-forge-0.3.0.tgz
-dsh plugin add ./dsh-novel-forge-0.3.0.tgz
+pnpm pack   # gera dsh-novel-forge-0.3.1.tgz
+dsh plugin add ./dsh-novel-forge-0.3.1.tgz
 
 # 3) Ou experimentar direto como overlay --patch (sem abrir profile)
 dsh --patch F:\typing\novel-forge-plugin\cordis.patch.yml --patch-argv
